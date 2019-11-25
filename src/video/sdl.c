@@ -17,9 +17,9 @@
  * along with Moonlight; if not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <led-matrix-c.h>
 #include "video.h"
 #include "ffmpeg.h"
-
 #include "../sdl.h"
 
 #include <SDL.h>
@@ -27,31 +27,55 @@
 
 #include <unistd.h>
 #include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
 #define DECODER_BUFFER_SIZE 92*1024
 
 static char* ffmpeg_buffer;
+static struct RGBLedMatrixOptions options;
+static struct RGBLedMatrix *matrix;
+static struct LedCanvas *offscreen_canvas;
+static int matrixwidth, matrixheight, i;
+static char **tmp;
 
-static int sdl_setup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags) {
-  int avc_flags = SLICE_THREADING;
-
-  if (ffmpeg_init(videoFormat, width, height, avc_flags, SDL_BUFFER_FRAMES, sysconf(_SC_NPROCESSORS_ONLN)) < 0) {
-    fprintf(stderr, "Couldn't initialize video decoding\n");
-    return -1;
-  }
-
-  ffmpeg_buffer = malloc(DECODER_BUFFER_SIZE + AV_INPUT_BUFFER_PADDING_SIZE);
-  if (ffmpeg_buffer == NULL) {
-    fprintf(stderr, "Not enough memory\n");
-    ffmpeg_destroy();
-    return -1;
-  }
-
-  return 0;
-}
 
 static void sdl_cleanup() {
   ffmpeg_destroy();
+}
+
+
+static int send_to_matrix(AVFrame* frame){
+  int xoffset = 100;
+  int yoffset = 100;
+  int x1 = 0;
+  int y1 = 0;
+  int x = 0;
+  int y = 0;
+  int p = 0;
+  uint8_t r, g, b= 0;
+ 
+
+  //fprintf(stderr,"%d %d %d\n",r,g,b);
+
+    for (y = 0; y < matrixheight; ++y) {
+      for (x = 0; x < 256; ++x) {
+        p= x*3+y*frame->linesize[0];
+        r= frame->data[0][p];
+        g= frame->data[0][p+1];
+        b= frame->data[0][p+2];
+        led_canvas_set_pixel(offscreen_canvas, x, y, r, g, b);
+      }
+    }
+
+    /* Now, we swap the canvas. We give swap_on_vsync the buffer we
+     * just have drawn into, and wait until the next vsync happens.
+     * we get back the unused buffer to which we'll draw in the next
+     * iteration.
+     */
+    offscreen_canvas = led_matrix_swap_on_vsync(matrix, offscreen_canvas);
+  
 }
 
 static int sdl_submit_decode_unit(PDECODE_UNIT decodeUnit) {
@@ -68,6 +92,9 @@ static int sdl_submit_decode_unit(PDECODE_UNIT decodeUnit) {
     if (SDL_LockMutex(mutex) == 0) {
       AVFrame* frame = ffmpeg_get_frame(false);
       if (frame != NULL) {
+
+        send_to_matrix(frame);
+
         sdlNextFrame++;
 
         SDL_Event event;
@@ -75,7 +102,7 @@ static int sdl_submit_decode_unit(PDECODE_UNIT decodeUnit) {
         event.user.code = SDL_CODE_FRAME;
         event.user.data1 = &frame->data;
         event.user.data2 = &frame->linesize;
-        SDL_PushEvent(&event);
+        //SDL_PushEvent(&event);
       }
 
       SDL_UnlockMutex(mutex);
@@ -87,6 +114,40 @@ static int sdl_submit_decode_unit(PDECODE_UNIT decodeUnit) {
   }
 
   return DR_OK;
+}
+
+
+static int sdl_setup(int videoFormat, int width, int height, int redrawRate, void* context, int drFlags) {
+  int avc_flags = SLICE_THREADING;
+
+  if (ffmpeg_init(videoFormat, width, height, avc_flags, SDL_BUFFER_FRAMES, sysconf(_SC_NPROCESSORS_ONLN)) < 0) {
+    fprintf(stderr, "Couldn't initialize video decoding\n");
+    return -1;
+  }
+
+  ffmpeg_buffer = malloc(DECODER_BUFFER_SIZE + AV_INPUT_BUFFER_PADDING_SIZE);
+  if (ffmpeg_buffer == NULL) {
+    fprintf(stderr, "Not enough memory\n");
+    ffmpeg_destroy();
+    return -1;
+  }
+
+  memset(&options, 0, sizeof(options));
+  options.rows = 64;
+  options.chain_length = 6;
+  matrix = led_matrix_create_from_options(&options, 0, &tmp);
+  offscreen_canvas = led_matrix_create_offscreen_canvas(matrix);
+
+  led_canvas_get_size(offscreen_canvas, &matrixwidth, &matrixheight);
+  fprintf(stderr, "Size: %dx%d. Hardware gpio mapping: %s\n",
+          matrixwidth, matrixheight, options.hardware_mapping);
+
+  if (matrix == NULL){
+    fprintf(stderr, "Could not create LED matrix\n");
+    return -1;
+  }
+
+  return 0;
 }
 
 DECODER_RENDERER_CALLBACKS decoder_callbacks_sdl = {

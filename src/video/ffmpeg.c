@@ -146,8 +146,9 @@ AVFrame* ffmpeg_get_frame(bool native_frame) {
     current_frame = next_frame;
     next_frame = (current_frame+1) % dec_frames_cnt;
 
-    if (ffmpeg_decoder == SOFTWARE || native_frame)
+    if (ffmpeg_decoder == SOFTWARE || native_frame){
       return dec_frames[current_frame];
+    }
   } else if (err != AVERROR(EAGAIN)) {
     char errorstring[512];
     av_strerror(err, errorstring, sizeof(errorstring));
