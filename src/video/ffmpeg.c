@@ -143,7 +143,7 @@ int ffmpeg_init(int videoFormat, int width, int height, int perf_lvl, int buffer
   sws_ctx = sws_getContext(decoder_ctx->width,
                            decoder_ctx->height,
                            decoder_ctx->pix_fmt,
-                           256,256,
+                           384,64,
                            AV_PIX_FMT_RGB24,
                            SWS_BILINEAR,
                            NULL,

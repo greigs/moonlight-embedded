@@ -45,31 +45,6 @@ static void sdl_cleanup() {
   ffmpeg_destroy();
 }
 
-static int res;
-
-static uint8_t Clamp (int n) 
-{
-	n &= -(n >= 0);
-	return n | ((255 - n) >> 31);
-}
-
-static uint8_t YUVtoR (uint8_t Y, uint8_t U, uint8_t V) 
-{
-	res = (1.164 * (Y - 16) + 1.596 * (V - 128));
-    return Clamp(res); 
-}
-static uint8_t YUVtoG (uint8_t Y, uint8_t U, uint8_t V) 
-{
-	res = (1.164 * (Y - 16) - 0.813 * (V - 128) - 0.391 * (U - 128));
-    return Clamp(res);
-}
-static uint8_t YUVtoB (uint8_t Y, uint8_t U, uint8_t V) 
-{
-	res = (1.164 * (Y - 16) + 2.018 * (U - 128));
-    return Clamp(res);
-}
-
-
 static int send_to_matrix(AVFrame* frame){
   int x1 = 0;
   int y1 = 0;
@@ -78,23 +53,13 @@ static int send_to_matrix(AVFrame* frame){
   int p = 0;
   uint8_t py, pu, pv= 0;
  
-
-  //fprintf(stderr,"%d %d %d\n",r,g,b);
-
     for (y = 0; y < 64; ++y) {
-      for (x = 0; x < 256; ++x) {
+      for (x = 0; x < 384; ++x) {
         p= x*3+y*frame->linesize[0];
         py= frame->data[0][p];
         pu= frame->data[0][p+1];
         pv= frame->data[0][p+2];
-
-        /*
-
-            const unsigned char r = y + 1.402*(v-128);
-    const unsigned char g = y - 0.344*(u-128) - 0.714*(v-128);
-    const unsigned char b = y + 1.772*(u-128);
-        */
-        led_canvas_set_pixel(offscreen_canvas, x, y, py,pu,pv); //YUVtoR(py,pu,pv), YUVtoG(py,pu,pv), YUVtoB(py,pu,pv));
+        led_canvas_set_pixel(offscreen_canvas, x, y, py,pu,pv);
       }
     }
 
@@ -126,11 +91,11 @@ static int sdl_submit_decode_unit(PDECODE_UNIT decodeUnit) {
 
         sdlNextFrame++;
 
-        SDL_Event event;
-        event.type = SDL_USEREVENT;
-        event.user.code = SDL_CODE_FRAME;
-        event.user.data1 = &frame->data;
-        event.user.data2 = &frame->linesize;
+        //SDL_Event event;
+        //event.type = SDL_USEREVENT;
+        //event.user.code = SDL_CODE_FRAME;
+        //event.user.data1 = &frame->data;
+        //event.user.data2 = &frame->linesize;
         //SDL_PushEvent(&event);
       }
 
@@ -163,8 +128,10 @@ static int sdl_setup(int videoFormat, int width, int height, int redrawRate, voi
 
   memset(&options, 0, sizeof(options));
   options.rows = 64;
-  options.chain_length = 6;
-  matrix = led_matrix_create_from_options(&options, 0, &tmp);
+  options.chain_length = 1;
+  options.cols = 384;
+  //int actualwidth = options.rows * options.chain_length;
+  matrix = led_matrix_create_from_options(&options, NULL, NULL);
   offscreen_canvas = led_matrix_create_offscreen_canvas(matrix);
 
   led_canvas_get_size(offscreen_canvas, &matrixwidth, &matrixheight);
