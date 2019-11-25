@@ -45,27 +45,56 @@ static void sdl_cleanup() {
   ffmpeg_destroy();
 }
 
+static int res;
+
+static uint8_t Clamp (int n) 
+{
+	n &= -(n >= 0);
+	return n | ((255 - n) >> 31);
+}
+
+static uint8_t YUVtoR (uint8_t Y, uint8_t U, uint8_t V) 
+{
+	res = (1.164 * (Y - 16) + 1.596 * (V - 128));
+    return Clamp(res); 
+}
+static uint8_t YUVtoG (uint8_t Y, uint8_t U, uint8_t V) 
+{
+	res = (1.164 * (Y - 16) - 0.813 * (V - 128) - 0.391 * (U - 128));
+    return Clamp(res);
+}
+static uint8_t YUVtoB (uint8_t Y, uint8_t U, uint8_t V) 
+{
+	res = (1.164 * (Y - 16) + 2.018 * (U - 128));
+    return Clamp(res);
+}
+
 
 static int send_to_matrix(AVFrame* frame){
-  int xoffset = 100;
-  int yoffset = 100;
   int x1 = 0;
   int y1 = 0;
   int x = 0;
   int y = 0;
   int p = 0;
-  uint8_t r, g, b= 0;
+  uint8_t py, pu, pv= 0;
  
 
   //fprintf(stderr,"%d %d %d\n",r,g,b);
 
-    for (y = 0; y < matrixheight; ++y) {
+    for (y = 0; y < 64; ++y) {
       for (x = 0; x < 256; ++x) {
         p= x*3+y*frame->linesize[0];
-        r= frame->data[0][p];
-        g= frame->data[0][p+1];
-        b= frame->data[0][p+2];
-        led_canvas_set_pixel(offscreen_canvas, x, y, r, g, b);
+        py= frame->data[0][p];
+        pu= frame->data[0][p+1];
+        pv= frame->data[0][p+2];
+
+        /*
+
+            const unsigned char r = y + 1.402*(v-128);
+    const unsigned char g = y - 0.344*(u-128) - 0.714*(v-128);
+    const unsigned char b = y + 1.772*(u-128);
+        */
+        led_canvas_set_pixel(offscreen_canvas, x, y, py,pu,pv); //YUVtoR(py,pu,pv), YUVtoG(py,pu,pv), YUVtoB(py,pu,pv));
       }
     }
 
