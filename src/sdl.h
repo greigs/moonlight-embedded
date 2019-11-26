@@ -23,6 +23,8 @@
 
 #include <stdbool.h>
 
+#include <led-matrix-c.h>
+
 #define SDL_NOTHING 0
 #define SDL_QUIT_APPLICATION 1
 #define SDL_MOUSE_GRAB 2

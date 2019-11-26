@@ -23,26 +23,45 @@
 #include "ffmpeg_vaapi.h"
 #endif
 
+#define __STDC_CONSTANT_MACROS
+
 #include <Limelight.h>
 #include <libavcodec/avcodec.h>
-
+#include <libavformat/avformat.h>
+#include <libswscale/swscale.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdbool.h>
+
+#include <fcntl.h>
+#include <getopt.h>
+#include <limits.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
+#include <unistd.h>
 
 // General decoder and renderer state
 static AVPacket pkt;
 static AVCodec* decoder;
 static AVCodecContext* decoder_ctx;
 static AVFrame** dec_frames;
-
+struct SwsContext *resize;
 static int dec_frames_cnt;
 static int current_frame, next_frame;
-
+static struct SwsContext *sws_ctx = NULL;
 enum decoders ffmpeg_decoder;
-
+static AVFrame *pFrameRGB = NULL;
+static int               numBytes;
+static uint8_t           *buffer = NULL;
 #define BYTES_PER_PIXEL 4
+
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(55,28,1)
+#  define av_frame_alloc avcodec_alloc_frame
+#  define av_frame_free avcodec_free_frame
+#endif
 
 // This function must be called before
 // any other decoding functions
@@ -71,10 +90,13 @@ int ffmpeg_init(int videoFormat, int width, int height, int perf_lvl, int buffer
   }
 
   decoder_ctx = avcodec_alloc_context3(decoder);
+  
   if (decoder_ctx == NULL) {
     printf("Couldn't allocate context");
     return -1;
   }
+
+    
 
   if (perf_lvl & DISABLE_LOOP_FILTER)
     // Skip the loop filter for performance reasons
@@ -94,6 +116,8 @@ int ffmpeg_init(int videoFormat, int width, int height, int perf_lvl, int buffer
   decoder_ctx->width = width;
   decoder_ctx->height = height;
   decoder_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+
+  
 
   int err = avcodec_open2(decoder_ctx, decoder, NULL);
   if (err < 0) {
@@ -116,6 +140,30 @@ int ffmpeg_init(int videoFormat, int width, int height, int perf_lvl, int buffer
     }
   }
 
+  sws_ctx = sws_getContext(decoder_ctx->width,
+                           decoder_ctx->height,
+                           decoder_ctx->pix_fmt,
+                           384,64,
+                           AV_PIX_FMT_RGB24,
+                           SWS_BILINEAR,
+                           NULL,
+                           NULL,
+                           NULL
+                           ); 
+
+  pFrameRGB=av_frame_alloc();
+
+  numBytes=avpicture_get_size(AV_PIX_FMT_RGB24, decoder_ctx->width,
+                              decoder_ctx->height);
+  buffer=(uint8_t *)av_malloc(numBytes*sizeof(uint8_t));
+
+  // Assign appropriate parts of buffer to image planes in pFrameRGB
+  // Note that pFrameRGB is an AVFrame, but AVFrame is a superset
+  // of AVPicture
+  avpicture_fill((AVPicture *)pFrameRGB, buffer, AV_PIX_FMT_RGB24,
+                 decoder_ctx->width, decoder_ctx->height);
+
+
   #ifdef HAVE_VAAPI
   if (ffmpeg_decoder == VAAPI)
     vaapi_init(decoder_ctx);
@@ -130,6 +178,7 @@ void ffmpeg_destroy(void) {
   if (decoder_ctx) {
     avcodec_close(decoder_ctx);
     av_free(decoder_ctx);
+    av_frame_free(&pFrameRGB);
     decoder_ctx = NULL;
   }
   if (dec_frames) {
@@ -146,8 +195,14 @@ AVFrame* ffmpeg_get_frame(bool native_frame) {
     current_frame = next_frame;
     next_frame = (current_frame+1) % dec_frames_cnt;
 
-    if (ffmpeg_decoder == SOFTWARE || native_frame)
-      return dec_frames[current_frame];
+    if (ffmpeg_decoder == SOFTWARE || native_frame){
+
+       sws_scale(sws_ctx, (uint8_t const * const *)dec_frames[current_frame]->data,
+                   dec_frames[current_frame]->linesize, 0, decoder_ctx->height,
+                   pFrameRGB->data, pFrameRGB->linesize);
+       return pFrameRGB;
+      //return dec_frames[current_frame];
+    }
   } else if (err != AVERROR(EAGAIN)) {
     char errorstring[512];
     av_strerror(err, errorstring, sizeof(errorstring));

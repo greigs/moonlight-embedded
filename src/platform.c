@@ -164,6 +164,7 @@ DECODER_RENDERER_CALLBACKS* platform_get_video(enum platform system) {
 }
 
 AUDIO_RENDERER_CALLBACKS* platform_get_audio(enum platform system, char* audio_device) {
+  return NULL;
   switch (system) {
   #ifdef HAVE_SDL
   case SDL:
