@@ -1,0 +1,11 @@
+/usr/local/lib/libmoonlight-pi.so
+/usr/local/bin/moonlight
+/usr/local/share/moonlight/gamecontrollerdb.txt
+/usr/local/etc/moonlight.conf
+/usr/local/lib/libgamestream.so.2.4.10
+/usr/local/lib/libgamestream.so.4
+/usr/local/lib/libgamestream.so
+/usr/local/lib/libmoonlight-common.so.2.4.10
+/usr/local/lib/libmoonlight-common.so.4
+/usr/local/lib/libmoonlight-common.so
+/usr/local/share/man/man1/moonlight.1

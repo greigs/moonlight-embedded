@@ -1,0 +1,3 @@
+# Hashes of file build rules.
+cf25af463fe1bf80284c6331744847f5 docs/CMakeFiles/docs
+728201a6a13bdbd71eb9bed7e340a504 docs/moonlight.1
